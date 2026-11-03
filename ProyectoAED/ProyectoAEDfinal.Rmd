@@ -1,11 +1,14 @@
 ---
 title: "ProyectoAED"
 author:
-  - David
-  - Carlos
-  - Daniela
+- David
+- Carlos
+- Daniela
 date: "`r Sys.Date()`"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
   html_document:
     toc: true
     toc_depth: 3
@@ -24,6 +27,13 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{r}
+library(pacman)
+packages = c("knitr", "ggplot2","tidyr","dplyr","readr","jsonlite")
+pacman::p_load(char=packages)
+
+```
+
 # Abstract
 
 <!-- David, Carlos y Daniela: redactar el resumen del proyecto (máximo 200 palabras aproximadamente). -->
@@ -36,7 +46,7 @@ knitr::opts_chunk$set(
 
 [Palabra clave 1]; [Palabra clave 2]; [Palabra clave 3]; [Palabra clave 4]
 
----
+------------------------------------------------------------------------
 
 # 1. Introduction
 
@@ -48,37 +58,106 @@ knitr::opts_chunk$set(
 
 ### Objetivo general
 
-[Indicar el objetivo principal.]
-
+Nuestro objetivo es interpretar los datos a través de la depuración de dos datasets (EMT.json,Densidad_Trafico.json) y comprobar si existe alguna relación entre ellos
 
 ## 1.5. Hipótesis o preguntas de investigación
 
-[Plantear las hipótesis o preguntas que se quieren investigar.]
+A tarvés de los análisis de los datasets que se han visualizado y estudiado, las preguntas más interesantes serían: [Plantear las hipótesis o preguntas que se quieren investigar.]
 
----
+------------------------------------------------------------------------
 
 # 2. Materials and Methods
 
-## 2.2. Variables de importancia
+## 2.1 Estudio de los datasets
 
+#David
+
+```{r}
+library(jsonlite)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(knitr)
+
+# Leer JSON
+densidad_dirty <- fromJSON(
+  "Densidad_Trafico.JSON",
+  simplifyVector = FALSE
+)
+
+# Convertir los datos a un data frame
+densidad <- map_dfr(densidad_dirty$features, function(f) {
+
+  propiedades <- f$properties
+
+  propiedades <- propiedades[
+    !vapply(propiedades, is.null, logical(1))
+  ]
+
+  as_tibble(c(
+    list(
+      id = f$id,
+      longitud = f$geometry$coordinates[[1]],
+      latitud = f$geometry$coordinates[[2]]
+    ),
+    propiedades
+  ))
+})
+
+# Información general del dataset
+cat("Número de registros:", nrow(densidad), "\n")
+cat("Número de variables:", ncol(densidad), "\n")
+cat("Registros con algún NA:", sum(!complete.cases(densidad)), "\n")
+
+# Estudio de las variables
+tipos <- data.frame(
+  variable = names(densidad),
+  tipo = sapply(densidad, function(x) class(x)[1]),
+  valores_distintos = sapply(
+    densidad,
+    function(x) length(unique(x))
+  ),
+  valores_NA = sapply(
+    densidad,
+    function(x) sum(is.na(x))
+  ),
+  porcentaje_NA = sapply(
+    densidad,
+    function(x) mean(is.na(x)) * 100
+  )
+)
+
+kable(tipos, digits = 2)
+```
+
+#Carlos
+
+```{r}
+
+```
+
+## 2.2. Decisiónes, variables de importancia
+
+Para el dataset de Densidad_Trafico.json nos interesan primordialmente las variables de "idpm" y "ih" ya que es el identificador de cada muestra y la densidad de tráfico de dicha muestra (espira/sensor) y conservaremos las variables "lat","long" y "ángulo" ya que querremos representar cada variable para el análisis visual`.
 
 ## 2.3. Preparación y limpieza de datos
 
 #David
+
 ```{r}
+
 
 ```
 
 #Carlos
+
 ```{r}
 
 ```
 
-
 ## 2.4. Metodología
 
 [Explicar las técnicas estadísticas, algoritmos y procedimientos empleados.]
-
 
 # 3. Results
 
@@ -98,7 +177,7 @@ knitr::opts_chunk$set(
 
 [Comparar los resultados obtenidos entre diferentes variables, grupos o métodos.]
 
----
+------------------------------------------------------------------------
 
 # 4. Discussion
 
@@ -106,18 +185,17 @@ knitr::opts_chunk$set(
 
 [Explicar qué significan los resultados.]
 
----
+------------------------------------------------------------------------
 
 # 5. Conclusions
 
 [Resumir los principales descubrimientos y responder a los objetivos y preguntas de investigación.]
 
----
+------------------------------------------------------------------------
 
 # 12. References
 
 [Incluir las referencias bibliográficas utilizadas.]
-
 
 ```{r}
 
