@@ -1,0 +1,267 @@
+---
+title: "ProyectoAEDfinal"
+author:
+  - David
+  - Carlos
+  - Daniela
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+# Abstract
+
+<!-- David, Carlos y Daniela: redactar el resumen del proyecto (máximo 200 palabras aproximadamente). -->
+
+**Resumen:**
+
+[Escribir aquí el resumen del trabajo, incluyendo el problema, los objetivos, la metodología, los principales resultados y las conclusiones.]
+
+# Keywords
+
+[Palabra clave 1]; [Palabra clave 2]; [Palabra clave 3]; [Palabra clave 4]
+
+---
+
+# 1. Introduction
+
+## 1.1. Contexto del problema
+
+[Introducir el tema del proyecto y explicar el contexto.]
+
+## 1.2. Motivación e importancia
+
+[Explicar por qué es importante estudiar este problema.]
+
+## 1.3. Estado del arte
+
+[Describir trabajos anteriores, investigaciones y soluciones existentes.]
+
+## 1.4. Objetivos
+
+### Objetivo general
+
+[Indicar el objetivo principal.]
+
+### Objetivos específicos
+
+- [Objetivo 1]
+- [Objetivo 2]
+- [Objetivo 3]
+
+## 1.5. Hipótesis o preguntas de investigación
+
+[Plantear las hipótesis o preguntas que se quieren investigar.]
+
+---
+
+# 2. Materials and Methods
+
+## 2.1. Descripción de los datos
+
+[Describir los datasets utilizados, su procedencia y sus características.]
+
+## 2.2. Variables
+
+[Explicar las variables relevantes y su significado.]
+
+## 2.3. Preparación y limpieza de datos
+
+[Describir los procedimientos de limpieza, transformación y tratamiento de valores perdidos.]
+
+## 2.4. Metodología
+
+[Explicar las técnicas estadísticas, algoritmos y procedimientos empleados.]
+
+## 2.5. Herramientas utilizadas
+
+- Lenguaje de programación:
+- Librerías:
+- Software:
+- Otras herramientas:
+
+---
+
+# 3. Results
+
+## 3.1. Análisis exploratorio
+
+[Presentar las principales características de los datos.]
+
+## 3.2. Resultados principales
+
+[Mostrar los resultados obtenidos.]
+
+## 3.3. Visualizaciones
+
+[Incluir gráficos, tablas y representaciones.]
+
+## 3.4. Comparación de resultados
+
+[Comparar los resultados obtenidos entre diferentes variables, grupos o métodos.]
+
+---
+
+# 4. Discussion
+
+## 4.1. Interpretación de los resultados
+
+[Explicar qué significan los resultados.]
+
+## 4.2. Relación con estudios anteriores
+
+[Comparar los resultados con los trabajos revisados en la introducción.]
+
+## 4.3. Limitaciones
+
+[Indicar las limitaciones de los datos y de la metodología.]
+
+## 4.4. Posibles mejoras y trabajos futuros
+
+[Proponer posibles ampliaciones del proyecto.]
+
+---
+
+# 5. Conclusions
+
+[Resumir los principales descubrimientos y responder a los objetivos y preguntas de investigación.]
+
+---
+
+# 6. Author Contributions
+
+- **David:** [Describir sus contribuciones.]
+- **Carlos:** [Describir sus contribuciones.]
+- **Daniela:** [Describir sus contribuciones.]
+
+# 7. Acknowledgements
+
+[Incluir agradecimientos si procede.]
+
+# 8. Funding
+
+[Indicar la financiación recibida o escribir que no se ha recibido financiación externa.]
+
+# 9. Institutional Review
+
+[Indicar si el proyecto requiere aprobación ética o si no es aplicable.]
+
+# 10. Data Availability
+
+[Indicar dónde se encuentran los datasets y el código utilizado.]
+
+# 11. Conflicts of Interest
+
+[Declarar posibles conflictos de interés o indicar que no existen.]
+
+---
+
+# 12. References
+
+[Incluir las referencias bibliográficas utilizadas.]
+
+---
+
+# 13. Appendix
+
+[Incluir información complementaria, código adicional, tablas o gráficos que no sean imprescindibles en el cuerpo principal.]
+
+---
+
+# 14. Bloques individuales de trabajo
+
+Estos bloques están destinados a que cada integrante pueda desarrollar su parte del proyecto antes de integrar el contenido definitivo.
+
+# David
+
+## Trabajo realizado
+
+[Describir las tareas desarrolladas.]
+
+## Desarrollo y metodología
+
+[Explicar los procedimientos utilizados.]
+
+## Código R
+
+```{r}
+# Código desarrollado por David
+
+```
+
+## Resultados obtenidos
+
+[Incluir resultados, tablas y gráficos.]
+
+## Conclusiones de su parte
+
+[Describir los principales descubrimientos.]
+
+---
+
+# Carlos
+
+## Trabajo realizado
+
+[Describir las tareas desarrolladas.]
+
+## Desarrollo y metodología
+
+[Explicar los procedimientos utilizados.]
+
+## Código R
+
+```{r}
+# Código desarrollado por Carlos
+
+```
+
+## Resultados obtenidos
+
+[Incluir resultados, tablas y gráficos.]
+
+## Conclusiones de su parte
+
+[Describir los principales descubrimientos.]
+
+---
+
+# Daniela
+
+## Trabajo realizado
+
+[Describir las tareas desarrolladas.]
+
+## Desarrollo y metodología
+
+[Explicar los procedimientos utilizados.]
+
+## Código R
+
+```{r}
+# Código desarrollado por Daniela
+
+```
+
+## Resultados obtenidos
+
+[Incluir resultados, tablas y gráficos.]
+
+## Conclusiones de su parte
+
+[Describir los principales descubrimientos.]
