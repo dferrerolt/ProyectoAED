@@ -29,7 +29,7 @@ knitr::opts_chunk$set(
 
 ```{r}
 library(pacman)
-packages = c("knitr", "ggplot2","tidyr","dplyr","readr","jsonlite")
+packages = c("knitr", "ggplot2","tidyr","dplyr","readr","jsonlite","purrr","tibble")
 pacman::p_load(char=packages)
 
 ```
@@ -73,11 +73,6 @@ A tarvés de los análisis de los datasets que se han visualizado y estudiado, l
 #David
 
 ```{r}
-library(jsonlite)
-library(dplyr)
-library(purrr)
-library(tibble)
-library(knitr)
 
 # Leer JSON
 densidad_dirty <- fromJSON(
@@ -108,6 +103,7 @@ densidad <- map_dfr(densidad_dirty$features, function(f) {
 cat("Número de registros:", nrow(densidad), "\n")
 cat("Número de variables:", ncol(densidad), "\n")
 cat("Registros con algún NA:", sum(!complete.cases(densidad)), "\n")
+unique(as.POSIXct(na.omit(densidad$fecha_actualizacion) / 1000, origin = "1970-01-01", tz = "Europe/Madrid"))
 
 # Estudio de las variables
 tipos <- data.frame(
@@ -128,6 +124,7 @@ tipos <- data.frame(
 )
 
 kable(tipos, digits = 2)
+
 ```
 
 #Carlos
@@ -138,7 +135,33 @@ kable(tipos, digits = 2)
 
 ## 2.2. Decisiónes, variables de importancia
 
-Para el dataset de Densidad_Trafico.json nos interesan primordialmente las variables de "idpm" y "ih" ya que es el identificador de cada muestra y la densidad de tráfico de dicha muestra (espira/sensor) y conservaremos las variables "lat","long" y "ángulo" ya que querremos representar cada variable para el análisis visual`.
+###Dataset Densidad_Trafico.json
+### Variables de interés
+
+Para el dataset `Densidad_Trafico.json`, las variables de mayor interés para nuestro análisis son:
+
+- **`idpm`**: identificador asociado a cada muestra o sensor.
+- **`ih`**: valor de intensidad de tráfico registrado por cada sensor.
+- **`latitud` y `longitud`**: permiten representar espacialmente la ubicación de los sensores.
+- **`angulo`**: aporta información sobre la orientación de cada sensor.
+- **`fecha_actualización`**: aporta información sobre la fecha y hora en la que se tomaron los datos.
+
+Estas variables serán las principales utilizadas en el análisis exploratorio y en las representaciones visuales.
+
+### Análisis de la información temporal
+
+Al estudiar la variable `fecha_actualizacion`, observamos que los 997 registros que contienen información comparten exactamente el mismo instante de actualización: **2 de noviembre de 2026 a las 21:48:01**. Los 214 registros restantes presentan valores ausentes.
+
+Esto sugiere que el conjunto de datos representa una instantánea de la información de los sensores, en lugar de una serie temporal. Por tanto, no es posible analizar directamente la evolución horaria de la intensidad del tráfico.
+
+Para evitar incorporar registros cuya referencia temporal desconocemos, se excluirán del análisis aquellos que no dispongan de información en `fecha_actualizacion`. Y por optimización simplemente se guardará en una variable auxiliar y se borrará su variable. 
+
+### Variables descartadas
+
+Finalmente, las variables administrativas y auxiliares, como `created_user`, `created_date`, `last_edited_user`, `last_edited_date`, `gid` y `globalid`, no se consideran necesarias para el análisis principal, por lo que no se utilizarán en las posteriores etapas del estudio.
+
+###Dataset EMT.json
+
 
 ## 2.3. Preparación y limpieza de datos
 
@@ -146,6 +169,26 @@ Para el dataset de Densidad_Trafico.json nos interesan primordialmente las varia
 
 ```{r}
 
+densidad_dirty <- densidad %>% select(idpm,ih,latitud,longitud,angulo,fecha_actualizacion) #solo escogemos las variables comentadas. Muy importente coger inicialmente la variable "fecha_actualizacion" para eliminar todas las filas que contienen NA antes de borrarla
+
+nrow(densidad_dirty) #inicialmente tenemos 1211 filas
+
+densidad_dirty <- densidad_dirty %>%
+  mutate(
+    ih = ifelse(ih <= 0, NA, ih)
+  )
+
+sum(complete.cases(densidad_dirty)) #solo hay 876 filas completas
+densidad_clean <- na.omit(densidad_dirty) #nos quedamos colo con las completas
+
+nrow(densidad_clean) 
+
+cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n") #comprobamos de nuevo los Na que hay en total
+
+densidad_clean <- densidad_clean %>% select(-fecha_actualizacion) # borramos la variable "fecha_actualizacion"
+fecha_actualizacion <- unique(as.POSIXct(na.omit(densidad$fecha_actualizacion) / 1000, origin = "1970-01-01", tz = "Europe/Madrid")) # y la guardamos como variable auxiliar
+
+fecha_actualizacion
 
 ```
 
@@ -155,9 +198,6 @@ Para el dataset de Densidad_Trafico.json nos interesan primordialmente las varia
 
 ```
 
-## 2.4. Metodología
-
-[Explicar las técnicas estadísticas, algoritmos y procedimientos empleados.]
 
 # 3. Results
 
@@ -171,7 +211,7 @@ Para el dataset de Densidad_Trafico.json nos interesan primordialmente las varia
 
 ## 3.3. Visualizaciones
 
-[Incluir gráficos, tablas y representaciones.]
+
 
 ## 3.4. Comparación de resultados
 
