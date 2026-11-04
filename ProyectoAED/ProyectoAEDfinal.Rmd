@@ -184,6 +184,8 @@ abline(h = LS, col = "red", lwd = 2, lty = 2)
 
 ```
 
+Para la intensidad de tráfico, el límite superior se calcula con la regla del boxplot sobre los valores finitos originales.
+
 #Carlos
 
 ```{r}
@@ -218,15 +220,24 @@ Al estudiar la variable `fecha_actualizacion`, observamos que los 997 registros 
 
 Esto sugiere que el conjunto de datos representa una instantánea de la información de los sensores, en lugar de una serie temporal. Por tanto, no es posible analizar directamente la evolución horaria de la intensidad del tráfico.
 
-Para evitar incorporar registros cuya referencia temporal desconocemos, se excluirán del análisis aquellos que no dispongan de información en `fecha_actualizacion`. Y por optimización simplemente se guardará en una variable auxiliar y se borrará su variable. 
+Se descartaron los registros sin `fecha_actualizacion`. La fecha se guardó en una variable auxiliar y se eliminó del conjunto limpio.
 
 ### Variables descartadas
 
 Finalmente, las variables administrativas y auxiliares, como `created_user`, `created_date`, `last_edited_user`, `last_edited_date`, `gid` y `globalid`, no se consideran necesarias para el análisis principal, por lo que no se utilizarán en las posteriores etapas del estudio.
 
-###Dataset EMT.json
+### Dataset EMT.json
 
-Las variables de interés son el identificador, la denominación, las líneas, el estado y las coordenadas de cada parada. Se conservan las paradas activas y se cuenta el número de líneas distintas en cada una. Los valores ausentes de `codvia` y `numportal` no afectan al análisis. Las coordenadas están expresadas en ETRS89 / UTM 30N (EPSG:25830).
+Las variables de interés son:
+
+- **`id_parada`** y **`denominacion`**: identifican cada parada.
+- **`lineas`**: permite contar las líneas distintas que pasan por ella.
+- **`suprimida`**: indica si la parada está activa.
+- **`x` e `y`**: indican su posición en ETRS89 / UTM 30N (EPSG:25830).
+
+### Valores ausentes
+
+Ninguna de estas variables tiene valores ausentes. Los `r sum(is.na(emt$codvia))` NA de `codvia` y los `r sum(is.na(emt$numportal))` de `numportal` corresponden a variables que no se usan, por lo que no se imputan ni se eliminan paradas por este motivo.
 
 
 ## 2.3. Preparación y limpieza de datos
@@ -285,7 +296,11 @@ ggplot(densidad_clean,
   theme_minimal()
 ```
 
+Tras descartar las intensidades no positivas y las filas incompletas quedan `r sum(complete.cases(densidad_dirty))` registros. El límite superior del boxplot es `r LS`; al excluir los valores que lo superan quedan `r nrow(densidad_clean)` registros.
+
 #Carlos
+
+Se seleccionaron las paradas activas y se separaron sus líneas para contar las distintas en cada parada.
 
 ```{r}
 emt_clean <- emt %>%
@@ -314,7 +329,7 @@ cat("Límite:", limite_emt,
 boxplot(emt_clean$n_lineas, horizontal = TRUE, xlab = "Líneas por parada")
 ```
 
-La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas con más de `r limite_emt` líneas. Se conservan porque su conectividad puede ser de interés.
+Como las líneas no tienen NA, se puede analizar su número en todas las paradas. La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas con más de `r limite_emt` líneas. Son valores altos, no necesariamente errores, y se conservan por su interés para el estudio.
 
 
 # 3. Results
