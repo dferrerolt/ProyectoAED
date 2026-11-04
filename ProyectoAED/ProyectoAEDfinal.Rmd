@@ -76,7 +76,7 @@ A tarvés de los análisis de los datasets que se han visualizado y estudiado, l
 
 # Leer JSON
 densidad_dirty <- fromJSON(
-  "Densidad_Trafico.JSON",
+  "raw/Densidad_Trafico.json",
   simplifyVector = FALSE
 )
 
@@ -130,7 +130,14 @@ kable(tipos, digits = 2)
 #Carlos
 
 ```{r}
-
+emt_json <- fromJSON("raw/emt.json")
+emt <- data.frame(emt_json$features$attributes, emt_json$features$geometry)
+cat("Registros:", nrow(emt), "| Variables:", ncol(emt),
+    "| Filas con NA:", sum(!complete.cases(emt)), "\n")
+kable(data.frame(variable = names(emt), tipo = sapply(emt, class),
+                 valores_distintos = sapply(emt, function(x) length(unique(x))),
+                 valores_NA = colSums(is.na(emt)),
+                 porcentaje_NA = colMeans(is.na(emt)) * 100), digits = 2)
 ```
 
 ## 2.2. Decisiónes, variables de importancia
@@ -162,6 +169,8 @@ Finalmente, las variables administrativas y auxiliares, como `created_user`, `cr
 
 ###Dataset EMT.json
 
+Las variables de interés son el identificador, la denominación, las líneas, el estado y las coordenadas de cada parada. Se conservan las paradas activas y se cuenta el número de líneas distintas en cada una. Los valores ausentes de `codvia` y `numportal` no afectan al análisis. Las coordenadas están expresadas en ETRS89 / UTM 30N (EPSG:25830).
+
 
 ## 2.3. Preparación y limpieza de datos
 
@@ -169,7 +178,8 @@ Finalmente, las variables administrativas y auxiliares, como `created_user`, `cr
 
 ```{r}
 
-densidad_dirty <- densidad %>% select(idpm,ih,latitud,longitud,angulo,fecha_actualizacion) #solo escogemos las variables comentadas. Muy importente coger inicialmente la variable "fecha_actualizacion" para eliminar todas las filas que contienen NA antes de borrarla
+densidad_dirty <- densidad %>%
+  select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
 
 nrow(densidad_dirty) #inicialmente tenemos 1211 filas
 
@@ -183,10 +193,12 @@ densidad_clean <- na.omit(densidad_dirty) #nos quedamos colo con las completas
 
 nrow(densidad_clean) 
 
-cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n") #comprobamos de nuevo los Na que hay en total
+cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n")
 
-densidad_clean <- densidad_clean %>% select(-fecha_actualizacion) # borramos la variable "fecha_actualizacion"
-fecha_actualizacion <- unique(as.POSIXct(na.omit(densidad$fecha_actualizacion) / 1000, origin = "1970-01-01", tz = "Europe/Madrid")) # y la guardamos como variable auxiliar
+densidad_clean <- densidad_clean %>% select(-fecha_actualizacion)
+fecha_actualizacion <- unique(as.POSIXct(
+  na.omit(densidad$fecha_actualizacion) / 1000,
+  origin = "1970-01-01", tz = "Europe/Madrid"))
 
 fecha_actualizacion
 
@@ -195,7 +207,19 @@ fecha_actualizacion
 #Carlos
 
 ```{r}
-
+emt_clean <- emt %>%
+  filter(suprimida == 0) %>%
+  select(id_parada, denominacion, lineas, x, y) %>%
+  distinct(id_parada, .keep_all = TRUE)
+lineas_emt <- emt_clean %>%
+  filter(!is.na(lineas), lineas != "") %>%
+  separate_rows(lineas, sep = ",") %>%
+  mutate(lineas = trimws(lineas)) %>%
+  distinct(id_parada, lineas)
+emt_clean <- emt_clean %>%
+  left_join(count(lineas_emt, id_parada, name = "n_lineas"), by = "id_parada")
+cat("Paradas activas:", nrow(emt_clean),
+    "| Líneas distintas:", n_distinct(lineas_emt$lineas), "\n")
 ```
 
 
@@ -210,6 +234,15 @@ fecha_actualizacion
 [Mostrar los resultados obtenidos.]
 
 ## 3.3. Visualizaciones
+
+Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`. El mapa muestra su distribución y el número de líneas por parada; no representa frecuencia de autobuses ni demanda.
+
+```{r, fig.width=5.5, fig.height=3}
+ggplot(emt_clean, aes(x, y, color = n_lineas)) +
+  geom_point(size = 1) + coord_equal() +
+  scale_x_continuous(breaks = c(725000, 735000)) +
+  labs(x = "Coordenada X (m)", y = "Coordenada Y (m)", color = "Líneas")
+```
 
 
 
