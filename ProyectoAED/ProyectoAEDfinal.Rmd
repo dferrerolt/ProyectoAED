@@ -300,6 +300,10 @@ emt_clean <- emt_clean %>%
   left_join(count(lineas_emt, id_parada, name = "n_lineas"), by = "id_parada")
 cat("Paradas activas:", nrow(emt_clean),
     "| Líneas distintas:", n_distinct(lineas_emt$lineas), "\n")
+
+emt_mapa <- emt_clean %>%
+  filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
+  arrange(n_lineas)
 ```
 
 
@@ -315,13 +319,21 @@ cat("Paradas activas:", nrow(emt_clean),
 
 ## 3.3. Visualizaciones
 
-Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`. El mapa muestra su distribución y el número de líneas por parada; no representa frecuencia de autobuses ni demanda.
+Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`.
+
+Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color indica líneas, no frecuencia ni demanda.
 
 ```{r, fig.width=5.5, fig.height=3}
-ggplot(emt_clean, aes(x, y, color = n_lineas)) +
-  geom_point(size = 1) + coord_equal() +
-  scale_x_continuous(breaks = c(725000, 735000)) +
-  labs(x = "Coordenada X (m)", y = "Coordenada Y (m)", color = "Líneas")
+ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
+  geom_point(size = 1) +
+  coord_equal(xlim = c(722000, 731000),
+              ylim = c(4369000, 4376000), expand = FALSE) +
+  scale_color_viridis_c() +
+  scale_x_continuous(breaks = c(722000, 726000, 731000),
+                     labels = function(x) x / 1000) +
+  scale_y_continuous(breaks = c(4369000, 4372000, 4376000),
+                     labels = function(x) x / 1000) +
+  labs(x = "Coordenada X (km)", y = "Coordenada Y (km)", color = "Líneas")
 ```
 
 
