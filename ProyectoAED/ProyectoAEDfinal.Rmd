@@ -22,8 +22,8 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   fig.align = "center",
-  fig.width = 5.5,
-  fig.height = 2.5
+  fig.width = 6,
+  fig.height = 3.5
 )
 ```
 
@@ -307,7 +307,7 @@ emt_mapa <- emt_clean %>%
   arrange(n_lineas)
 ```
 
-```{r, fig.width=5.5, fig.height=2.5}
+```{r, fig.width=6, fig.height=3}
 limite_emt <- quantile(emt_clean$n_lineas, 0.75) + 1.5 * IQR(emt_clean$n_lineas)
 cat("Límite:", limite_emt,
     "| Paradas por encima:", sum(emt_clean$n_lineas > limite_emt), "\n")
@@ -331,14 +331,15 @@ La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas co
 
 Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`.
 
-Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color indica líneas, no frecuencia ni demanda.
+Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color usa una escala logarítmica para distinguir las paradas con pocas líneas; la leyenda muestra el número original de líneas, no la frecuencia ni la demanda.
 
-```{r, fig.width=5.5, fig.height=3}
+```{r, fig.width=6, fig.height=4}
 ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
   geom_point(size = 1) +
   coord_equal(xlim = c(722000, 731000),
               ylim = c(4369000, 4376000), expand = FALSE) +
-  scale_color_viridis_c() +
+  scale_color_viridis_c(option = "plasma", trans = "log10",
+                        breaks = c(1, 2, 3, 5, 8, 14)) +
   scale_x_continuous(breaks = c(722000, 726000, 731000),
                      labels = function(x) x / 1000) +
   scale_y_continuous(breaks = c(4369000, 4372000, 4376000),
