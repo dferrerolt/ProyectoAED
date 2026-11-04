@@ -22,8 +22,8 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   fig.align = "center",
-  fig.width = 8,
-  fig.height = 5
+  fig.width = 5.5,
+  fig.height = 2.5
 )
 ```
 
@@ -235,7 +235,8 @@ Las variables de interés son el identificador, la denominación, las líneas, e
 
 ```{r}
 
-densidad_dirty <- densidad %>% select(idpm,ih,latitud,longitud,angulo,fecha_actualizacion) #solo escogemos las #variables comentadas. Muy importente coger inicialmente la variable "fecha_actualizacion" para eliminar todas #las filas que contienen NA antes de borrarla
+densidad_dirty <- densidad %>%
+  select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
 
 nrow(densidad_dirty) #inicialmente tenemos 1211 filas
 
@@ -256,7 +257,7 @@ fecha_actualizacion <- unique(as.POSIXct(
   na.omit(densidad$fecha_actualizacion) / 1000,
   origin = "1970-01-01", tz = "Europe/Madrid"))
 
-#Se exploró el método de Humpel, sigma y percentil, obteniendo un resultado más equilibrado para la regla boxplot por lo que eliminaremos los datos mayores al LS
+# Se eliminan los valores mayores al límite superior del boxplot.
 densidad_clean <- densidad_clean[densidad_clean$ih <= LS, ]
 
 fecha_actualizacion
@@ -300,7 +301,20 @@ emt_clean <- emt_clean %>%
   left_join(count(lineas_emt, id_parada, name = "n_lineas"), by = "id_parada")
 cat("Paradas activas:", nrow(emt_clean),
     "| Líneas distintas:", n_distinct(lineas_emt$lineas), "\n")
+
+emt_mapa <- emt_clean %>%
+  filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
+  arrange(n_lineas)
 ```
+
+```{r, fig.width=5.5, fig.height=2.5}
+limite_emt <- quantile(emt_clean$n_lineas, 0.75) + 1.5 * IQR(emt_clean$n_lineas)
+cat("Límite:", limite_emt,
+    "| Paradas por encima:", sum(emt_clean$n_lineas > limite_emt), "\n")
+boxplot(emt_clean$n_lineas, horizontal = TRUE, xlab = "Líneas por parada")
+```
+
+La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas con más de `r limite_emt` líneas. Se conservan porque su conectividad puede ser de interés.
 
 
 # 3. Results
@@ -315,13 +329,21 @@ cat("Paradas activas:", nrow(emt_clean),
 
 ## 3.3. Visualizaciones
 
-Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`. El mapa muestra su distribución y el número de líneas por parada; no representa frecuencia de autobuses ni demanda.
+Las `r nrow(emt_clean)` paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas. La mediana es `r median(emt_clean$n_lineas, na.rm = TRUE)` línea por parada y el máximo es `r max(emt_clean$n_lineas, na.rm = TRUE)`.
+
+Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color indica líneas, no frecuencia ni demanda.
 
 ```{r, fig.width=5.5, fig.height=3}
-ggplot(emt_clean, aes(x, y, color = n_lineas)) +
-  geom_point(size = 1) + coord_equal() +
-  scale_x_continuous(breaks = c(725000, 735000)) +
-  labs(x = "Coordenada X (m)", y = "Coordenada Y (m)", color = "Líneas")
+ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
+  geom_point(size = 1) +
+  coord_equal(xlim = c(722000, 731000),
+              ylim = c(4369000, 4376000), expand = FALSE) +
+  scale_color_viridis_c() +
+  scale_x_continuous(breaks = c(722000, 726000, 731000),
+                     labels = function(x) x / 1000) +
+  scale_y_continuous(breaks = c(4369000, 4372000, 4376000),
+                     labels = function(x) x / 1000) +
+  labs(x = "Coordenada X (km)", y = "Coordenada Y (km)", color = "Líneas")
 ```
 
 
