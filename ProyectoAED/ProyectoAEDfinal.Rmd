@@ -29,7 +29,8 @@ knitr::opts_chunk$set(
 
 ```{r}
 library(pacman)
-packages = c("knitr", "ggplot2","tidyr","dplyr","readr","jsonlite","purrr","tibble")
+packages = c("knitr", "ggplot2", "tidyr", "dplyr", "readr",
+             "jsonlite", "purrr", "tibble", "sf")
 pacman::p_load(char=packages)
 
 ```
@@ -336,6 +337,29 @@ Como las líneas no tienen NA, se puede analizar su número en todas las paradas
 
 ## 3.1. Análisis exploratorio
 
+### Tráfico
+
+Tras el filtrado quedan `r nrow(densidad_clean)` sensores. La intensidad media es `r round(mean(densidad_clean$ih), 2)` y la mediana es `r median(densidad_clean$ih)`.
+
+```{r}
+max_trafico <- densidad_clean %>%
+  filter(ih == max(ih)) %>% arrange(idpm) %>% select(idpm, ih)
+kable(max_trafico, col.names = c("Sensor", "Intensidad"))
+
+puntos_trafico <- sf::st_as_sf(densidad_clean,
+                                coords = c("longitud", "latitud"), crs = 4326) %>%
+  sf::st_transform(25830)
+coord_trafico <- sf::st_coordinates(puntos_trafico)
+zonas_trafico <- data.frame(x = coord_trafico[, 1], y = coord_trafico[, 2]) %>%
+  filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
+  count(celda_x = floor(x / 250) * 250, celda_y = floor(y / 250) * 250,
+        name = "sensores")
+```
+
+La media supera la mediana; el máximo del conjunto filtrado es `r max(densidad_clean$ih)` y corresponde a los sensores de la tabla. En la zona del mapa hay `r sum(zonas_trafico$sensores)` sensores repartidos en `r nrow(zonas_trafico)` cuadrículas de 250 m. Las `r sum(zonas_trafico$sensores == max(zonas_trafico$sensores))` cuadrículas con más sensores tienen `r max(zonas_trafico$sensores)` cada una. Se cuentan sensores, no vehículos.
+
+### Paradas EMT
+
 De las `r nrow(emt_clean)` paradas, `r sum(emt_clean$n_lineas == 1)` (`r round(mean(emt_clean$n_lineas == 1) * 100, 1)` %) tienen una línea. La media es `r round(mean(emt_clean$n_lineas), 2)` y la mediana es `r median(emt_clean$n_lineas)`.
 
 ```{r}
@@ -362,8 +386,6 @@ En la zona del mapa, las paradas ocupan `r nrow(zonas_emt)` cuadrículas de 250 
 Las paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas.
 
 Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color usa una escala logarítmica para distinguir las paradas con pocas líneas; la leyenda muestra el número original de líneas, no la frecuencia ni la demanda.
-
-\newpage
 
 ```{r, fig.width=6, fig.height=4}
 ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
