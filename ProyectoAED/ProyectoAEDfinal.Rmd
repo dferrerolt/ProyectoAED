@@ -22,8 +22,8 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   fig.align = "center",
-  fig.width = 8,
-  fig.height = 5
+  fig.width = 5.5,
+  fig.height = 2.5
 )
 ```
 
@@ -235,7 +235,8 @@ Las variables de interés son el identificador, la denominación, las líneas, e
 
 ```{r}
 
-densidad_dirty <- densidad %>% select(idpm,ih,latitud,longitud,angulo,fecha_actualizacion) #solo escogemos las #variables comentadas. Muy importente coger inicialmente la variable "fecha_actualizacion" para eliminar todas #las filas que contienen NA antes de borrarla
+densidad_dirty <- densidad %>%
+  select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
 
 nrow(densidad_dirty) #inicialmente tenemos 1211 filas
 
@@ -256,7 +257,7 @@ fecha_actualizacion <- unique(as.POSIXct(
   na.omit(densidad$fecha_actualizacion) / 1000,
   origin = "1970-01-01", tz = "Europe/Madrid"))
 
-#Se exploró el método de Humpel, sigma y percentil, obteniendo un resultado más equilibrado para la regla boxplot por lo que eliminaremos los datos mayores al LS
+# Se eliminan los valores mayores al límite superior del boxplot.
 densidad_clean <- densidad_clean[densidad_clean$ih <= LS, ]
 
 fecha_actualizacion
@@ -305,6 +306,15 @@ emt_mapa <- emt_clean %>%
   filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
   arrange(n_lineas)
 ```
+
+```{r, fig.width=5.5, fig.height=2.5}
+limite_emt <- quantile(emt_clean$n_lineas, 0.75) + 1.5 * IQR(emt_clean$n_lineas)
+cat("Límite:", limite_emt,
+    "| Paradas por encima:", sum(emt_clean$n_lineas > limite_emt), "\n")
+boxplot(emt_clean$n_lineas, horizontal = TRUE, xlab = "Líneas por parada")
+```
+
+La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas con más de `r limite_emt` líneas. Se conservan porque su conectividad puede ser de interés.
 
 
 # 3. Results
