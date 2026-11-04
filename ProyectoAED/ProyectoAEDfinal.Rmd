@@ -76,7 +76,7 @@ A tarvés de los análisis de los datasets que se han visualizado y estudiado, l
 
 # Leer JSON
 densidad_dirty <- fromJSON(
-  "Densidad_Trafico.JSON",
+  "raw/Densidad_Trafico.json",
   simplifyVector = FALSE
 )
 
@@ -130,7 +130,13 @@ kable(tipos, digits = 2)
 #Carlos
 
 ```{r}
-
+emt_json <- fromJSON("raw/emt.json")
+emt <- data.frame(emt_json$features$attributes, emt_json$features$geometry)
+cat("Número de registros:", nrow(emt), "\n")
+cat("Número de variables:", ncol(emt), "\n")
+cat("Registros con algún NA:", sum(!complete.cases(emt)), "\n")
+kable(data.frame(variable = names(emt), tipo = sapply(emt, class),
+                 valores_NA = colSums(is.na(emt))))
 ```
 
 ## 2.2. Decisiónes, variables de importancia
@@ -162,6 +168,8 @@ Finalmente, las variables administrativas y auxiliares, como `created_user`, `cr
 
 ###Dataset EMT.json
 
+Las variables de interés son el identificador, la denominación, las líneas, el estado y las coordenadas de cada parada. Se conservan las paradas activas y se cuenta el número de líneas distintas en cada una. Las coordenadas están expresadas en ETRS89 / UTM 30N (EPSG:25830).
+
 
 ## 2.3. Preparación y limpieza de datos
 
@@ -169,7 +177,8 @@ Finalmente, las variables administrativas y auxiliares, como `created_user`, `cr
 
 ```{r}
 
-densidad_dirty <- densidad %>% select(idpm,ih,latitud,longitud,angulo,fecha_actualizacion) #solo escogemos las variables comentadas. Muy importente coger inicialmente la variable "fecha_actualizacion" para eliminar todas las filas que contienen NA antes de borrarla
+densidad_dirty <- densidad %>%
+  select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
 
 nrow(densidad_dirty) #inicialmente tenemos 1211 filas
 
@@ -183,10 +192,12 @@ densidad_clean <- na.omit(densidad_dirty) #nos quedamos colo con las completas
 
 nrow(densidad_clean) 
 
-cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n") #comprobamos de nuevo los Na que hay en total
+cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n")
 
-densidad_clean <- densidad_clean %>% select(-fecha_actualizacion) # borramos la variable "fecha_actualizacion"
-fecha_actualizacion <- unique(as.POSIXct(na.omit(densidad$fecha_actualizacion) / 1000, origin = "1970-01-01", tz = "Europe/Madrid")) # y la guardamos como variable auxiliar
+densidad_clean <- densidad_clean %>% select(-fecha_actualizacion)
+fecha_actualizacion <- unique(as.POSIXct(
+  na.omit(densidad$fecha_actualizacion) / 1000,
+  origin = "1970-01-01", tz = "Europe/Madrid"))
 
 fecha_actualizacion
 
