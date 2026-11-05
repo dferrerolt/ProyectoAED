@@ -407,6 +407,62 @@ ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
 
 [Comparar los resultados obtenidos entre diferentes variables, grupos o métodos.]
 
+## 3.5 Preguntas que se buscan resolver con los datos
+
+### ¿Dónde se encuentran las paradas con mayor tráfico cercano? (100 metros o menos)
+```{r}
+# Punto central de ambos datasets
+lat_ref <- mean(densidad_clean$latitud)
+lon_ref <- mean(densidad_clean$longitud)
+x_ref <- mean(emt_clean$x)
+y_ref <- mean(emt_clean$y)
+
+
+#Se crean nuevas x e y medidas en metros para la densidad de tráfico
+densidad_clean <- densidad_clean %>%
+  mutate(
+    x_m = x_ref + (longitud - lon_ref) * (111000 * cos(lat_ref * pi / 180)), #Se tiene en cuenta la latitud de Valencia
+    y_m = y_ref + (latitud - lat_ref) * 111000 # 1º = 111000m 
+  )
+
+#Se añade a emt_clean la variable ih_media_100m para la intensidad media de los sensores a menos de 100 metros
+emt_clean$ih_media_100m <- sapply(1:nrow(emt_clean), function(i) {
+  #Cálculo de distancias usando la distancia euclídea
+  distancias <- sqrt((densidad_clean$x_m - emt_clean$x[i])^2 + 
+                     (densidad_clean$y_m - emt_clean$y[i])^2)
+  #Media de la intensidad de tráfico a menos de 100 metros
+  sensores_100m <- densidad_clean$ih[distancias <= 100]
+  mean(sensores_100m)
+})
+```
+
+```{r}
+emt_mapa_trafico <- emt_clean %>%
+  filter(between(x, 722000, 731000), between(y, 4369000, 4376000))
+
+ggplot(emt_mapa_trafico, aes(x = x / 1000, y = y / 1000, color = ih_media_100m)) +
+  geom_point() +
+  scale_color_viridis_c(option = "plasma", na.value = "grey70", name = "Intensidad (<100m)") +
+  labs(
+    title = "Mapa de Paradas EMT según la Intensidad de Tráfico Cercano",
+    x = "Coordenada X (km)",
+    y = "Coordenada Y (km)"
+  )
+```
+
+### ¿Las paradas con más líneas tienen más tráfico cerca?
+
+```{r}
+ggplot(emt_clean, aes(x = n_lineas, y = ih_media_100m)) +
+  geom_point(color = "blue") +
+  labs(
+    title = "Relación entre Líneas por Parada e Intensidad de Tráfico",
+    x = "Número de líneas en la parada",
+    y = "Intensidad media de tráfico"
+  )
+
+```
+
 ------------------------------------------------------------------------
 
 # 4. Discussion
