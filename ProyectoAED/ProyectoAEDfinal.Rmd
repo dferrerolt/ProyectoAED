@@ -450,6 +450,31 @@ ggplot(emt_mapa_trafico, aes(x = x / 1000, y = y / 1000, color = ih_media_100m))
   )
 ```
 
+### ¿Cuáles son las paradas con mayor tráfico?
+```{r}
+# Se selecciona el nombre de las calles con más densidad de tráfico
+top5_calles <- emt_clean %>%
+  # Se impia la denominación para quedarse solo con la calle (antes del guion y paréntesis)
+  mutate(calle = sub(" *[\\(-].*", "", denominacion)) %>%
+  group_by(calle) %>%
+  summarize(
+    ih_media_calle = mean(ih_media_100m, na.rm = TRUE),
+    n_paradas = n()
+  ) %>%
+  arrange(desc(ih_media_calle)) %>%
+  head(5)
+
+ggplot(top5_calles, aes(x = ih_media_calle, fill = ih_media_calle, y = reorder(calle, ih_media_calle))) +
+  geom_col(width = 0.65) +
+  scale_fill_viridis_c(option = "plasma", name = "Intensidad\n(veh/h)") +
+  labs(
+    title = "5 calles de Valencia con mayor densidad de tráfico",
+    subtitle = "Promedio de densidad de tráfico registrado a menos de 100 m",
+    x = "Intensidad media de tráfico (<100m)",
+    y = "Calle / Avenida"
+  )
+```
+
 ### ¿Las paradas con más líneas tienen más tráfico cerca?
 
 ```{r}
@@ -462,6 +487,8 @@ ggplot(emt_clean, aes(x = n_lineas, y = ih_media_100m)) +
   )
 
 ```
+
+
 
 ------------------------------------------------------------------------
 
