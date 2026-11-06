@@ -1,519 +1,514 @@
 ---
-title: "ProyectoAED"
+title: "Análisis exploratorio de la intensidad del tráfico y la red de autobuses EMT en València"
 author:
-- David
-- Carlos
-- Daniela
-date: "`r Sys.Date()`"
+  - name: David
+    affil: 1
+  - name: Carlos
+    affil: 1
+  - name: Daniela
+    affil: 1
+affiliation:
+  - num: 1
+    address: |
+      Máster Universitario en Ciencia de Datos
+      Universitat de València, València, España
+authorcitation: |
+  David; Carlos; Daniela
+correspondence: |
+  Universitat de València.
+journal: notspecified
+type: article
+status: submit
+header-includes:
+  - \usepackage{etoolbox}
+  - \usepackage{changepage}
+  - \AtBeginEnvironment{Highlighting}{\scriptsize}
+  - \AtBeginEnvironment{verbatim}{\scriptsize}
+  - \BeforeBeginEnvironment{Shaded}{\begin{adjustwidth}{-1.2cm}{-1.2cm}}
+  - \AfterEndEnvironment{Shaded}{\end{adjustwidth}}
+simplesummary: |
+  Este trabajo explora dos conjuntos de datos abiertos de València: la intensidad
+  del tráfico registrada por sensores y la información geográfica de las paradas
+  de autobús EMT. Se estudian su calidad, distribución espacial y posibles
+  relaciones entre la red de transporte público y la intensidad del tráfico.
+abstract: |
+  El objetivo de este proyecto es explorar dos conjuntos de datos abiertos de València, correspondientes a sensores de intensidad de tráfico y paradas de autobús EMT, para analizar su distribución espacial y posibles relaciones. Tras evaluar su calidad y depurar los datos, se estudian la distribución de los sensores, las características de las paradas y la intensidad media de tráfico en un radio de 100 metros alrededor de estas. Finalmente, se explora la relación entre el número de líneas por parada y la intensidad de tráfico cercana. Los datos representan una instantánea temporal, por lo que no permiten analizar la evolución horaria del tráfico. Los resultados permiten identificar patrones espaciales y explorar asociaciones, sin establecer relaciones de causalidad.
+keywords: |
+  análisis exploratorio de datos; tráfico urbano; EMT; transporte público; análisis espacial
+acknowledgement: |
+  No se han indicado fuentes de financiación ni agradecimientos específicos.
+authorcontributions: |
+  David, Carlos y Daniela participaron en el desarrollo del proyecto y en el
+  análisis exploratorio de los conjuntos de datos. La distribución concreta de
+  contribuciones individuales queda pendiente de completar por el equipo.
+bibliography: mybibfile.bib
+endnotes: false
 output:
-  pdf_document:
-    toc: true
-    toc_depth: '3'
-  html_document:
-    toc: true
-    toc_depth: 3
-    number_sections: true
-    theme: readable
+  rticles::mdpi_article:
+    extra_dependencies: longtable
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  warning = FALSE,
-  message = FALSE,
-  fig.align = "center",
-  fig.width = 6,
-  fig.height = 3.5
+knitr::opts_chunk$set( echo = TRUE, message = FALSE, warning = FALSE, error = FALSE, fig.align = "center",
+fig.width = 6,
+fig.height = 3.75,
+out.width = "70%",
+dpi = 120,
+comment = NA,
+size = "tiny"
 )
-```
-
-```{r}
 library(pacman)
-packages = c("knitr", "ggplot2", "tidyr", "dplyr", "readr",
-             "jsonlite", "purrr", "tibble", "sf")
-pacman::p_load(char=packages)
-
+packages <- c( "knitr", "ggplot2", "tidyr", "dplyr", "readr", "jsonlite", "purrr", "tibble", "sf", "stringr" )
+pacman::p_load(char = packages)
 ```
 
-# Abstract
 
-<!-- David, Carlos y Daniela: redactar el resumen del proyecto (máximo 200 palabras aproximadamente). -->
+## Funciones auxiliares
 
-**Resumen:**
+En este bloque se definen funciones reutilizables para evitar repetir procedimientos:
+resumir variables, calcular límites de valores atípicos, obtener estadísticas
+descriptivas, contar elementos por cuadrículas y calcular la intensidad media
+de tráfico alrededor de las paradas mediante distancias en metros.
 
-[Escribir aquí el resumen del trabajo, incluyendo el problema, los objetivos, la metodología, los principales resultados y las conclusiones.]
+```{r funciones}
+resumen_variables <- function(datos) {data.frame(variable = names(datos), tipo = sapply(datos, function(x)
+class(x)[1]),valores_distintos = sapply(datos, function(x) length(unique(x))),valores_NA = 
+sapply(datos, function(x) sum(is.na(x))),
+ porcentaje_NA = sapply(datos, function(x) mean(is.na(x))*100))}
+limites_boxplot <- function(x) {x <- x[is.finite(x)]
+ q1 <- quantile(x, 0.25, na.rm = TRUE)
+ q3 <- quantile(x, 0.75, na.rm = TRUE)
+ rango <- IQR(x, na.rm = TRUE)
+ c(LI = as.numeric(q1-1.5*rango), LS = as.numeric(q3+1.5*rango))}
+estadisticas <- function(x) {
+ c(media = mean(x, na.rm = TRUE), mediana = median(x, na.rm = TRUE), minimo = min(x, na.rm = TRUE),
+ maximo = max(x, na.rm = TRUE),
+ desviacion = sd(x, na.rm = TRUE))}
+contar_celdas <- function(datos, x, y, resolucion = 250) {datos %>%
+ filter(between({{x}}, 722000, 731000), between({{y}}, 4369000, 4376000)) %>%
+ count(celda_x = floor({{x}}/resolucion)*resolucion, celda_y = floor({{y}}/resolucion)*resolucion,
+ name = "total")}
+calcular_trafico_cercano <- function(paradas, sensores, radio = 100) {
+ sensores_sf <- sf::st_as_sf(sensores, coords = c("longitud", "latitud"), crs = 4326) %>%
+ sf::st_transform(25830)
+ paradas_sf <- sf::st_as_sf(paradas, coords = c("x", "y"), crs = 25830, remove = FALSE)
+ vecinos <- sf::st_is_within_distance( paradas_sf, sensores_sf, dist = radio)
+ paradas$n_sensores_100m <- lengths(vecinos)
+ paradas$ih_media_100m <- vapply(vecinos, function(indices) {
+ if (length(indices) == 0) NA_real_ else mean(sensores$ih[indices], na.rm = TRUE)
+ }, numeric(1))
+ paradas}
+```
 
-# Keywords
 
-[Palabra clave 1]; [Palabra clave 2]; [Palabra clave 3]; [Palabra clave 4]
+\AtBeginDocument{\small}
 
-------------------------------------------------------------------------
+# Introduction
 
-# 1. Introduction
+## Contexto del problema
 
-## 1.1. Contexto del problema
+El análisis exploratorio de datos permite comprender la estructura, calidad y
+comportamiento de conjuntos de datos antes de abordar análisis más específicos.
+En el contexto urbano, la intensidad del tráfico y la distribución de la red de
+transporte público son dos dimensiones relevantes para describir la movilidad.
 
-[Introducir el tema del proyecto y explicar el contexto.]]
+Este proyecto utiliza dos conjuntos de datos abiertos de València: `Densidad_Trafico.json`,
+que contiene registros de sensores de tráfico, y `emt.json`, que recoge información
+sobre las paradas de autobús de la EMT. El estudio comienza con la inspección y
+depuración de ambos conjuntos y continúa con el análisis de sus variables y
+distribuciones espaciales.
 
-## 1.4. Objetivos
+## Objetivos
 
 ### Objetivo general
 
-Nuestro objetivo es interpretar los datos a través de la depuración de dos datasets (EMT.json,Densidad_Trafico.json) y comprobar si existe alguna relación entre ellos
+Nuestro objetivo es interpretar los datos a través de la depuración de dos
+datasets (`EMT.json` y `Densidad_Trafico.json`) y comprobar si existe alguna
+relación entre ellos.
 
-## 1.5. Hipótesis o preguntas de investigación
+## Hipótesis o preguntas de investigación
 
-A tarvés de los análisis de los datasets que se han visualizado y estudiado, las preguntas más interesantes serían: [Plantear las hipótesis o preguntas que se quieren investigar.]
+A través de los análisis de los datasets que se han visualizado y estudiado,
+las preguntas más interesantes son:
 
-------------------------------------------------------------------------
+- ¿Dónde se encuentran las paradas con mayor tráfico cercano (a 100 metros o menos)?
+- ¿Cuáles son las paradas con mayor tráfico cercano?
+- ¿Las paradas con más líneas tienen más tráfico cerca?
 
-# 2. Materials and Methods
+# Materials and Methods
 
-## 2.1 Estudio de los datasets
+## Estudio de los datasets
 
-#David
+### Dataset Densidad_Trafico.json
 
-```{r}
+#### Importación y estructura general
 
-# Leer JSON
-densidad_dirty <- fromJSON(
-  "raw/Densidad_Trafico.json",
-  simplifyVector = FALSE
-)
-
-# Convertir los datos a un data frame
-densidad <- map_dfr(densidad_dirty$features, function(f) {
-
-  propiedades <- f$properties
-
-  propiedades <- propiedades[
-    !vapply(propiedades, is.null, logical(1))
-  ]
-
-  as_tibble(c(
-    list(
-      id = f$id,
-      longitud = f$geometry$coordinates[[1]],
-      latitud = f$geometry$coordinates[[2]]
-    ),
-    propiedades
-  ))
+```{r importar-trafico}
+densidad_dirty <- jsonlite::fromJSON( "raw/Densidad_Trafico.json", simplifyVector = FALSE )
+densidad <- purrr::map_dfr(densidad_dirty$features, function(f) { propiedades <- f$properties
+ propiedades <- propiedades[ !vapply(propiedades, is.null, logical(1)) ]
+ tibble::as_tibble(c( list( id = f$id, longitud = f$geometry$coordinates[[1]],
+ latitud = f$geometry$coordinates[[2]]),propiedades))
 })
-
-# Información general del dataset
 cat("Número de registros:", nrow(densidad), "\n")
 cat("Número de variables:", ncol(densidad), "\n")
 cat("Registros con algún NA:", sum(!complete.cases(densidad)), "\n")
-unique(as.POSIXct(na.omit(densidad$fecha_actualizacion) / 1000, 
-                  origin = "1970-01-01", tz = "Europe/Madrid"))
-
-# Estudio de las variables
-tipos <- data.frame(
-  variable = names(densidad),
-  tipo = sapply(densidad, function(x) class(x)[1]),
-  valores_distintos = sapply(
-    densidad,
-    function(x) length(unique(x))
-  ),
-  valores_NA = sapply(
-    densidad,
-    function(x) sum(is.na(x))
-  ),
-  porcentaje_NA = sapply(
-    densidad,
-    function(x) mean(is.na(x)) * 100
-  )
-)
-
-kable(tipos, digits = 2)
-
 ```
 
-##Análisis outliers
-```{r}
+El conjunto original contiene 1.211 registros y 13 variables. Se detectan
+214 registros con al menos un valor ausente.
 
-# Eliminamos valores no finitos para los cálculos y gráficos
+#### Estudio de las variables
+
+```{r variables-trafico}
+tipos <- resumen_variables(densidad)
+knitr::kable(tipos, digits = 2, caption = "Descripción de las variables del dataset de tráfico")
+```
+
+#### Análisis de valores atípicos
+
+```{r outliers-trafico}
 ih <- densidad$ih[is.finite(densidad$ih)]
-
-# Boxplot inicial: análisis visual de outliers
-boxplot(ih,
-        main = "Análisis de valores atípicos",
-        ylab = "Intensidad (ih)",
-        col = "orange")
-
-# Cuartiles e IQR
-Q1 <- quantile(ih, 0.25)
-Q3 <- quantile(ih, 0.75)
-IQR_ih <- IQR(ih)
-
-# Límites del boxplot
-LI <- Q1 - 1.5 * IQR_ih
-LS <- Q3 + 1.5 * IQR_ih
-
-# Gráfico de las observaciones
-plot(ih,
-     main = "Análisis de valores atípicos",
-     ylab = "Intensidad (ih)",
-     xlab = "Observaciones")
-
-# Límites IQR
-abline(h = c(LI, LS),
-       col = "red", lwd = 2, lty = 2)
-
-# Mapa según regla IQR
-ggplot(densidad,
-       aes(x = longitud, y = latitud,
-           color = !(ih >= LI & ih <= LS))) +
-  geom_point(na.rm = TRUE) +
-  scale_color_manual(
-    values = c("FALSE" = "blue", "TRUE" = "orange"),
-    name = "Outlier",
-    labels = c("No", "Sí"),
-    na.value = "grey"
-  )
-
-
-# Boxplot sin los valores considerados outliers
-boxplot(ih[ih <= LS & ih >= LI],
-        main = "Boxplot de ih (sin outliers)",
-        ylab = "Intensidad (ih)",
-        col = "orange")
-
-abline(h = LS, col = "red", lwd = 2, lty = 2)
-
-
-
+limites <- limites_boxplot(ih)
+LI <- limites["LI"]
+LS <- limites["LS"]
+plot( ih, main = "Análisis de valores atípicos", ylab = "Intensidad (ih)", xlab = "Observaciones" )
+abline(h = c(LI, LS), col = "red", lwd = 2, lty = 2)
+#Aqui mostramos los datos de densidad e trafico y a partir de que momento los consideramos
+#outliers, estos son lo que se eliminarán más tarde
 ```
 
-Para la intensidad de tráfico, el límite superior se calcula con la regla del boxplot sobre los valores finitos originales.
-
-#Carlos
-
-```{r}
-emt_json <- fromJSON("raw/emt.json")
-emt <- data.frame(emt_json$features$attributes, emt_json$features$geometry)
-cat("Registros:", nrow(emt), "| Variables:", ncol(emt),
-    "| Filas con NA:", sum(!complete.cases(emt)), "\n")
-kable(data.frame(variable = names(emt), tipo = sapply(emt, class),
-                 valores_distintos = sapply(emt, function(x) length(unique(x))),
-                 valores_NA = colSums(is.na(emt)),
-                 porcentaje_NA = colMeans(is.na(emt)) * 100), digits = 2)
-```
-
-## 2.2. Decisiónes, variables de importancia
-
-###Dataset Densidad_Trafico.json
-### Variables de interés
-
-Para el dataset `Densidad_Trafico.json`, las variables de mayor interés para nuestro análisis son:
-
-- **`idpm`**: identificador asociado a cada muestra o sensor.
-- **`ih`**: valor de intensidad de tráfico registrado por cada sensor.
-- **`latitud` y `longitud`**: permiten representar espacialmente la ubicación de los sensores.
-- **`angulo`**: aporta información sobre la orientación de cada sensor.
-- **`fecha_actualización`**: aporta información sobre la fecha y hora en la que se tomaron los datos.
-
-Estas variables serán las principales utilizadas en el análisis exploratorio y en las representaciones visuales.
-
-### Análisis de la información temporal
-
-Al estudiar la variable `fecha_actualizacion`, observamos que los 997 registros que contienen información comparten exactamente el mismo instante de actualización: **2 de noviembre de 2026 a las 21:48:01**. Los 214 registros restantes presentan valores ausentes.
-
-Esto sugiere que el conjunto de datos representa una instantánea de la información de los sensores, en lugar de una serie temporal. Por tanto, no es posible analizar directamente la evolución horaria de la intensidad del tráfico.
-
-Se descartaron los registros sin `fecha_actualizacion`. La fecha se guardó en una variable auxiliar y se eliminó del conjunto limpio.
-
-### Variables descartadas
-
-Finalmente, las variables administrativas y auxiliares, como `created_user`, `created_date`, `last_edited_user`, `last_edited_date`, `gid` y `globalid`, no se consideran necesarias para el análisis principal, por lo que no se utilizarán en las posteriores etapas del estudio.
+Para la intensidad de tráfico, los límites inferior y superior se calculan
+mediante la regla del boxplot sobre los valores finitos originales.
 
 ### Dataset EMT.json
 
+#### Importación y estructura general
+
+```{r importar-emt}
+emt_json <- jsonlite::fromJSON("raw/emt.json")
+emt <- data.frame( emt_json$features$attributes, emt_json$features$geometry )
+cat( "Registros:", nrow(emt), "| Variables:", ncol(emt), "| Filas con NA:", sum(!complete.cases(emt)), "\n" )
+calidad_emt <- resumen_variables(emt)
+knitr::kable(calidad_emt, digits = 2, caption = "Descripción de las variables del dataset EMT")
+```
+
+El dataset EMT contiene 1.155 registros y 10 variables. Se observan 114 filas
+con al menos un valor ausente.
+
+## Decisiones y variables de importancia
+
+### Dataset Densidad_Trafico.json: variables de interés
+
+Para el dataset `Densidad_Trafico.json`, las variables de mayor interés para
+nuestro análisis son:
+
+- `idpm`: identificador asociado a cada muestra o sensor.
+- `ih`: valor de intensidad de tráfico registrado por cada sensor.
+- `latitud` y `longitud`: permiten representar espacialmente la ubicación de los sensores.
+- `angulo`: aporta información sobre la orientación de cada sensor.
+- `fecha_actualizacion`: aporta información sobre la fecha y hora en la que se tomaron los datos.
+
+Estas variables serán las principales utilizadas en el análisis exploratorio
+y en las representaciones visuales.
+
+### Análisis de la información temporal
+
+Al estudiar la variable `fecha_actualizacion`, observamos que los 997 registros
+que contienen información comparten exactamente el mismo instante de
+actualización: 2 de noviembre de 2026 a las 21:48:01. Los 214 registros
+restantes presentan valores ausentes.
+
+Esto sugiere que el conjunto de datos representa una instantánea de la
+información de los sensores, en lugar de una serie temporal. Por tanto, no es
+posible analizar directamente la evolución horaria de la intensidad del tráfico.
+
+Se descartaron los registros sin `fecha_actualizacion`. La fecha se guardó en
+una variable auxiliar y se eliminó del conjunto limpio.
+
+### Variables descartadas
+
+Finalmente, las variables administrativas y auxiliares, como `created_user`,
+`created_date`, `last_edited_user`, `last_edited_date`, `gid` y `globalid`,
+no se consideran necesarias para el análisis principal, por lo que no se
+utilizarán en las posteriores etapas del estudio.
+
+### Dataset EMT.json: variables de interés
+
 Las variables de interés son:
 
-- **`id_parada`** y **`denominacion`**: identifican cada parada.
-- **`lineas`**: permite contar las líneas distintas que pasan por ella.
-- **`suprimida`**: indica si la parada está activa.
-- **`x` e `y`**: indican su posición en ETRS89 / UTM 30N (EPSG:25830).
+- `id_parada` y `denominacion`: identifican cada parada.
+- `lineas`: permite contar las líneas distintas que pasan por ella.
+- `suprimida`: indica si la parada está activa.
+- `x` e `y`: indican su posición en ETRS89 / UTM 30N (EPSG:25830).
 
 ### Valores ausentes
 
-Ninguna de estas variables tiene valores ausentes. Los `r sum(is.na(emt$codvia))` NA de `codvia` y los `r sum(is.na(emt$numportal))` de `numportal` corresponden a variables que no se usan, por lo que no se imputan ni se eliminan paradas por este motivo.
+Ninguna de estas variables de interés tiene valores ausentes. Los 111 NA de
+`codvia` y los 3 de `numportal` corresponden a variables que no se usan, por
+lo que no se imputan ni se eliminan paradas por este motivo.
 
+## Preparación y limpieza de datos
 
-## 2.3. Preparación y limpieza de datos
+### Limpieza del dataset de tráfico
 
-#David
-
-```{r}
-
+```{r limpieza-trafico}
+# Seleccionamos las variables necesarias para el análisis.
 densidad_dirty <- densidad %>%
-  select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
-
-nrow(densidad_dirty) #inicialmente tenemos 1211 filas
-
+dplyr::select(idpm, ih, latitud, longitud, angulo, fecha_actualizacion)
+# Comprobamos el número inicial de registros.
+nrow(densidad_dirty)
+# Convertimos las intensidades iguales o inferiores a cero en NA.
 densidad_dirty <- densidad_dirty %>%
-  mutate(
-    ih = ifelse(ih <= 0, NA, ih)
-  )
-
-sum(complete.cases(densidad_dirty)) #solo hay 876 filas completas
-densidad_clean <- na.omit(densidad_dirty) #nos quedamos colo con las completas
-
-nrow(densidad_clean) 
-
+mutate(ih = ifelse(ih <= 0, NA, ih))
+# Contamos los registros completos.
+sum(complete.cases(densidad_dirty))
+# Eliminamos los registros con valores ausentes.
+densidad_clean <- na.omit(densidad_dirty)
+nrow(densidad_clean)
+# Comprobamos que no quedan valores ausentes.
 cat("Número de registros con NA:", sum(is.na(densidad_clean)), "\n")
-
-densidad_clean <- densidad_clean %>% select(-fecha_actualizacion)
-fecha_actualizacion <- unique(as.POSIXct(
-  na.omit(densidad$fecha_actualizacion) / 1000,
-  origin = "1970-01-01", tz = "Europe/Madrid"))
-
+# Eliminamos la fecha del conjunto limpio.
+densidad_clean <- densidad_clean %>%
+dplyr::select(-fecha_actualizacion)
+# Convertimos las fechas de actualización a formato POSIXct.
+fecha_actualizacion <- unique(as.POSIXct( na.omit(densidad$fecha_actualizacion) / 1000, origin = "1970-01-01",
+tz = "Europe/Madrid"
+))
+# Mostramos las fechas encontradas.
+fecha_actualizacion
 # Se eliminan los valores mayores al límite superior del boxplot.
 densidad_clean <- densidad_clean[densidad_clean$ih <= LS, ]
-
-fecha_actualizacion
-
-boxplot(densidad_clean$ih)
-
-ggplot(densidad_dirty,
-       aes(x = longitud,
-           y = latitud,
-           color = ih)) +
-  geom_point() +
-  scale_color_gradient(low = "blue", high = "orange") +
-  labs(title = "Distribución espacial de la intensidad antes del filtrado",
-       color = "Intensidad (ih)") +
-  theme_minimal()
-
-ggplot(densidad_clean,
-       aes(x = longitud,
-           y = latitud,
-           color = ih)) +
-  geom_point() +
-  scale_color_gradient(low = "blue", high = "orange") +
-  labs(title = "Distribución espacial de la intensidad despues de filtrado",
-       color = "Intensidad (ih)") +
-  theme_minimal()
 ```
 
-Tras descartar las intensidades no positivas y las filas incompletas quedan `r sum(complete.cases(densidad_dirty))` registros. El límite superior del boxplot es `r LS`; al excluir los valores que lo superan quedan `r nrow(densidad_clean)` registros.
+```{r mapas-trafico-antes-despues}
+ggplot( densidad_clean, aes(x = longitud, y = latitud, color = ih) ) +
+geom_point() +
+scale_color_gradient(low = "blue", high = "orange") +
+labs( title = "Distribución espacial de la intensidad después del filtrado", color = "Intensidad (ih)" ) +
+theme_minimal()
+```
 
-#Carlos
+Tras descartar las intensidades no positivas y las filas incompletas quedan
+876 registros. El límite superior del boxplot es 1074; al excluir los valores
+que lo superan quedan 836 registros.
 
-Se seleccionaron las paradas activas y se separaron sus líneas para contar las distintas en cada parada.
+### Limpieza del dataset EMT
 
-```{r}
+Se seleccionaron las paradas activas y se separaron sus líneas para contarlas
+de forma distinta en cada parada.
+
+```{r limpieza-emt}
 emt_clean <- emt %>%
-  filter(suprimida == 0) %>%
-  select(id_parada, denominacion, lineas, x, y) %>%
-  distinct(id_parada, .keep_all = TRUE)
+filter(suprimida == 0) %>%
+select(id_parada, denominacion, lineas, x, y) %>%
+distinct(id_parada, .keep_all = TRUE)
 lineas_emt <- emt_clean %>%
-  filter(!is.na(lineas), lineas != "") %>%
-  separate_rows(lineas, sep = ",") %>%
-  mutate(lineas = trimws(lineas)) %>%
-  distinct(id_parada, lineas)
+filter(!is.na(lineas), lineas != "") %>%
+separate_rows(lineas, sep = ",") %>%
+mutate(lineas = trimws(lineas)) %>%
+distinct(id_parada, lineas)
 emt_clean <- emt_clean %>%
-  left_join(count(lineas_emt, id_parada, name = "n_lineas"), by = "id_parada")
-cat("Paradas activas:", nrow(emt_clean),
-    "| Líneas distintas:", n_distinct(lineas_emt$lineas), "\n")
-
+left_join( count(lineas_emt, id_parada, name = "n_lineas"), by = "id_parada" )
+cat( "Paradas activas:", nrow(emt_clean), "| Líneas distintas:", n_distinct(lineas_emt$lineas), "\n" )
 emt_mapa <- emt_clean %>%
-  filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
-  arrange(n_lineas)
+filter( between(x, 722000, 731000), between(y, 4369000, 4376000) ) %>%
+arrange(n_lineas)
+limite_emt <- quantile(emt_clean$n_lineas, 0.75) +
+1.5 * IQR(emt_clean$n_lineas)
+cat( "Límite:", limite_emt, "| Paradas por encima:", sum(emt_clean$n_lineas > limite_emt), "\n" )
 ```
 
-```{r, fig.width=6, fig.height=3}
-limite_emt <- quantile(emt_clean$n_lineas, 0.75) + 1.5 * IQR(emt_clean$n_lineas)
-cat("Límite:", limite_emt,
-    "| Paradas por encima:", sum(emt_clean$n_lineas > limite_emt), "\n")
-boxplot(emt_clean$n_lineas, horizontal = TRUE, xlab = "Líneas por parada")
-```
+Como las líneas no tienen NA, se puede analizar su número en todas las paradas.
+La regla del boxplot señala 109 paradas con más de 3,5 líneas. Son valores
+altos, no necesariamente errores, y se conservan por su interés para el estudio.
 
-Como las líneas no tienen NA, se puede analizar su número en todas las paradas. La regla del boxplot señala `r sum(emt_clean$n_lineas > limite_emt)` paradas con más de `r limite_emt` líneas. Son valores altos, no necesariamente errores, y se conservan por su interés para el estudio.
+# Results
 
-
-# 3. Results
-
-## 3.1. Análisis exploratorio
+## Análisis exploratorio
 
 ### Tráfico
 
-Tras el filtrado quedan `r nrow(densidad_clean)` sensores. La intensidad media es `r round(mean(densidad_clean$ih), 2)` y la mediana es `r median(densidad_clean$ih)`.
+Tras el filtrado quedan 836 sensores. La intensidad media es 326,56 y la
+mediana es 251.
 
-```{r}
+```{r resumen-trafico}
+estadisticas(densidad_clean$ih)
 max_trafico <- densidad_clean %>%
-  filter(ih == max(ih)) %>% arrange(idpm) %>% select(idpm, ih)
-kable(max_trafico, col.names = c("Sensor", "Intensidad"))
-
-puntos_trafico <- sf::st_as_sf(densidad_clean,
-                                coords = c("longitud", "latitud"), crs = 4326) %>%
-  sf::st_transform(25830)
+filter(ih == max(ih)) %>%
+arrange(idpm) %>%
+select(idpm, ih)
+knitr::kable( max_trafico, col.names = c("Sensor", "Intensidad"),
+caption = "Sensores con la intensidad máxima del conjunto filtrado"
+)
+puntos_trafico <- sf::st_as_sf( densidad_clean, coords = c("longitud", "latitud"), crs = 4326 ) %>%
+sf::st_transform(25830)
 coord_trafico <- sf::st_coordinates(puntos_trafico)
-zonas_trafico <- data.frame(x = coord_trafico[, 1], y = coord_trafico[, 2]) %>%
-  filter(between(x, 722000, 731000), between(y, 4369000, 4376000)) %>%
-  count(celda_x = floor(x / 250) * 250, celda_y = floor(y / 250) * 250,
-        name = "sensores")
+datos_trafico <- data.frame( x = coord_trafico[, 1], y = coord_trafico[, 2] )
+zonas_trafico <- contar_celdas(datos_trafico, x, y) %>%
+rename(sensores = total)
 ```
 
-La media supera la mediana; el máximo del conjunto filtrado es `r max(densidad_clean$ih)` y corresponde a los sensores de la tabla. En la zona del mapa hay `r sum(zonas_trafico$sensores)` sensores repartidos en `r nrow(zonas_trafico)` cuadrículas de 250 m. Las `r sum(zonas_trafico$sensores == max(zonas_trafico$sensores))` cuadrículas con más sensores tienen `r max(zonas_trafico$sensores)` cada una. Se cuentan sensores, no vehículos.
+La media supera la mediana; el máximo del conjunto filtrado es 1050 y
+corresponde a los sensores de la tabla. En la zona del mapa hay 836 sensores
+repartidos en 386 cuadrículas de 250 m. Las cuatro cuadrículas con más sensores
+tienen 8 cada una. Se cuentan sensores, no vehículos.
 
 ### Paradas EMT
 
-De las `r nrow(emt_clean)` paradas, `r sum(emt_clean$n_lineas == 1)` (`r round(mean(emt_clean$n_lineas == 1) * 100, 1)` %) tienen una línea. La media es `r round(mean(emt_clean$n_lineas), 2)` y la mediana es `r median(emt_clean$n_lineas)`.
+De las 1.155 paradas, 598 (51,8 %) tienen una línea. La media es 1,88 y la
+mediana es 1.
 
-```{r}
+```{r resumen-emt}
+estadisticas(emt_clean$n_lineas)
 ranking_emt <- emt_clean %>%
-  arrange(desc(n_lineas), id_parada) %>% select(denominacion, n_lineas)
-kable(head(ranking_emt, 2), col.names = c("Parada", "Líneas"))
-
-zonas_emt <- emt_mapa %>%
-  count(celda_x = floor(x / 250) * 250, celda_y = floor(y / 250) * 250,
-        name = "paradas") %>%
-  arrange(desc(paradas), celda_x, celda_y)
+arrange(desc(n_lineas), id_parada) %>%
+select(denominacion, n_lineas)
+knitr::kable( head(ranking_emt, 2), col.names = c("Parada", "Líneas"),
+caption = "Paradas con mayor número de líneas"
+)
+zonas_emt <- contar_celdas(emt_mapa, x, y) %>%
+rename(paradas = total)
 ```
 
 La mayoría de paradas tiene pocas líneas; unas pocas concentran más conexiones.
+En la zona del mapa, las paradas ocupan 450 cuadrículas de 250 m de lado.
+La más poblada tiene 8 paradas, entre X 726,25–726,5 km e Y 4372,25–4372,5 km.
+Se cuentan paradas por cuadrícula, no usuarios ni frecuencia de paso.
 
-En la zona del mapa, las paradas ocupan `r nrow(zonas_emt)` cuadrículas de 250 m de lado. La más poblada tiene `r zonas_emt$paradas[1]` paradas, entre X `r zonas_emt$celda_x[1] / 1000`–`r (zonas_emt$celda_x[1] + 250) / 1000` km e Y `r zonas_emt$celda_y[1] / 1000`–`r (zonas_emt$celda_y[1] + 250) / 1000` km. Se cuentan paradas por cuadrícula, no usuarios ni frecuencia de paso.
+## Resultados principales
 
-## 3.2. Resultados principales
+Las paradas activas registran 46 líneas distintas. Para centrar el mapa se
+limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran
+976 paradas; las restantes se conservan en los datos. El color usa una escala
+logarítmica para distinguir las paradas con pocas líneas; la leyenda muestra
+el número original de líneas, no la frecuencia ni la demanda.
 
-[Mostrar los resultados obtenidos.]
+## Visualizaciones
 
-## 3.3. Visualizaciones
+### Distribución espacial de las paradas EMT
 
-Las paradas activas registran `r n_distinct(lineas_emt$lineas)` líneas distintas.
-
-Para centrar el mapa se limita la zona a X entre 722 y 731 km e Y entre 4369 y 4376 km. Se muestran `r nrow(emt_mapa)` paradas; las restantes se conservan en los datos. El color usa una escala logarítmica para distinguir las paradas con pocas líneas; la leyenda muestra el número original de líneas, no la frecuencia ni la demanda.
-
-```{r, fig.width=6, fig.height=4}
+```{r mapa-emt}
 ggplot(emt_mapa, aes(x, y, color = n_lineas)) +
-  geom_point(size = 1) +
-  coord_equal(xlim = c(722000, 731000),
-              ylim = c(4369000, 4376000), expand = FALSE) +
-  scale_color_viridis_c(option = "plasma", trans = "log10",
-                        breaks = c(1, 2, 3, 5, 8, 14)) +
-  scale_x_continuous(breaks = c(722000, 726000, 731000),
-                     labels = function(x) x / 1000) +
-  scale_y_continuous(breaks = c(4369000, 4372000, 4376000),
-                     labels = function(x) x / 1000) +
-  labs(x = "Coordenada X (km)", y = "Coordenada Y (km)", color = "Líneas")
+geom_point(size = 1) +
+coord_equal( xlim = c(722000, 731000), ylim = c(4369000, 4376000), expand = FALSE ) +
+scale_color_viridis_c( option = "plasma", trans = "log10", breaks = c(1, 2, 3, 5, 8, 14) ) +
+scale_x_continuous( breaks = c(722000, 726000, 731000), labels = function(x) x / 1000 ) +
+scale_y_continuous( breaks = c(4369000, 4372000, 4376000), labels = function(x) x / 1000 ) +
+labs( x = "Coordenada X (km)", y = "Coordenada Y (km)", color = "Líneas",
+title = "Distribución espacial de las paradas EMT"
+) +
+theme_minimal()
 ```
 
+## Comparación de resultados
 
+La comparación entre ambos conjuntos se aborda relacionando la intensidad
+registrada por los sensores de tráfico con la localización y las características
+de las paradas EMT. Para calcular distancias, las coordenadas geográficas de
+tráfico se transforman a EPSG:25830, el mismo sistema métrico utilizado por EMT.
 
-## 3.4. Comparación de resultados
-
-[Comparar los resultados obtenidos entre diferentes variables, grupos o métodos.]
-
-## 3.5 Preguntas que se buscan resolver con los datos
+## Preguntas que se buscan resolver con los datos
 
 ### ¿Dónde se encuentran las paradas con mayor tráfico cercano? (100 metros o menos)
-```{r}
-# Punto central de ambos datasets
-lat_ref <- mean(densidad_clean$latitud)
-lon_ref <- mean(densidad_clean$longitud)
-x_ref <- mean(emt_clean$x)
-y_ref <- mean(emt_clean$y)
 
-
-#Se crean nuevas x e y medidas en metros para la densidad de tráfico
-densidad_clean <- densidad_clean %>%
-  mutate(
-    x_m = x_ref + (longitud - lon_ref) * (111000 * cos(lat_ref * pi / 180)), #Se tiene en cuenta la latitud de Valencia
-    y_m = y_ref + (latitud - lat_ref) * 111000 # 1º = 111000m 
-  )
-
-#Se añade a emt_clean la variable ih_media_100m para la intensidad media de los sensores a menos de 100 metros
-emt_clean$ih_media_100m <- sapply(1:nrow(emt_clean), function(i) {
-  #Cálculo de distancias usando la distancia euclídea
-  distancias <- sqrt((densidad_clean$x_m - emt_clean$x[i])^2 + 
-                     (densidad_clean$y_m - emt_clean$y[i])^2)
-  #Media de la intensidad de tráfico a menos de 100 metros
-  sensores_100m <- densidad_clean$ih[distancias <= 100]
-  mean(sensores_100m)
-})
-```
-
-```{r}
+```{r trafico-cercano}
+# Calculamos la intensidad media de sensores situados a 100 m o menos
+# de cada parada, transformando ambos datasets al mismo sistema métrico.
+emt_clean <- calcular_trafico_cercano( paradas = emt_clean, sensores = densidad_clean, radio = 100 )
 emt_mapa_trafico <- emt_clean %>%
-  filter(between(x, 722000, 731000), between(y, 4369000, 4376000))
-
-ggplot(emt_mapa_trafico, aes(x = x / 1000, y = y / 1000, color = ih_media_100m)) +
-  geom_point() +
-  scale_color_viridis_c(option = "plasma", na.value = "grey70", name = "Intensidad (<100m)") +
-  labs(
-    title = "Mapa de Paradas EMT según la Intensidad de Tráfico Cercano",
-    x = "Coordenada X (km)",
-    y = "Coordenada Y (km)"
-  )
+filter( between(x, 722000, 731000), between(y, 4369000, 4376000) )
+ggplot( emt_mapa_trafico, aes(x = x / 1000, y = y / 1000, color = ih_media_100m) ) +
+geom_point() +
+scale_color_viridis_c( option = "plasma", na.value = "grey70", name = "Intensidad (<100m)" ) +
+labs( title = "Mapa de paradas EMT según la intensidad de tráfico cercana", x = "Coordenada X (km)",
+y = "Coordenada Y (km)"
+) +
+theme_minimal()
 ```
 
 ### ¿Cuáles son las paradas con mayor tráfico?
-```{r}
-# Se selecciona el nombre de las calles con más densidad de tráfico
-top5_calles <- emt_clean %>%
-  # Se impia la denominación para quedarse solo con la calle (antes del guion y paréntesis)
-  mutate(calle = sub(" *[\\(-].*", "", denominacion)) %>%
-  group_by(calle) %>%
-  summarize(
-    ih_media_calle = mean(ih_media_100m, na.rm = TRUE),
-    n_paradas = n()
-  ) %>%
-  arrange(desc(ih_media_calle)) %>%
-  head(5)
 
-ggplot(top5_calles, aes(x = ih_media_calle, fill = ih_media_calle, y = reorder(calle, ih_media_calle))) +
-  geom_col(width = 0.65) +
-  scale_fill_viridis_c(option = "plasma", name = "Intensidad\n(veh/h)") +
-  labs(
-    title = "5 calles de Valencia con mayor densidad de tráfico",
-    subtitle = "Promedio de densidad de tráfico registrado a menos de 100 m",
-    x = "Intensidad media de tráfico (<100m)",
-    y = "Calle / Avenida"
-  )
+```{r calles-mayor-trafico}
+# Se selecciona el nombre de las calles con mayor intensidad de tráfico cercana
+top5_calles <- emt_clean %>%
+mutate(calle = sub("[\\(-].*", "", denominacion)) %>%
+group_by(calle) %>%
+summarize( ih_media_calle = mean(ih_media_100m, na.rm = TRUE), n_paradas = n(), .groups = "drop" ) %>%
+arrange(desc(ih_media_calle)) %>%
+head(5)
+ggplot( top5_calles, aes( x = ih_media_calle, fill = ih_media_calle, y = reorder(calle, ih_media_calle) ) ) +
+geom_col(width = 0.65) +
+scale_fill_viridis_c( option = "plasma", name = "Intensidad media" ) +
+labs( title = "Cinco calles de València con mayor intensidad de tráfico",
+subtitle = "Promedio de intensidad de tráfico registrado a menos de 100 m",
+x = "Intensidad media de tráfico (<100m)",
+y = "Calle/Avenida"
+) +
+theme_minimal()
 ```
+
 
 ### ¿Las paradas con más líneas tienen más tráfico cerca?
 
-```{r}
-ggplot(emt_clean, aes(x = n_lineas, y = ih_media_100m)) +
-  geom_point(color = "blue") +
-  labs(
-    title = "Relación entre Líneas por Parada e Intensidad de Tráfico",
-    x = "Número de líneas en la parada",
-    y = "Intensidad media de tráfico"
-  )
-
+```{r lineas-trafico}
+# Calculamos la correlación de Spearman usando solo observaciones completas.
+datos_cor <- emt_clean %>%
+filter(!is.na(n_lineas), !is.na(ih_media_100m))
+ggplot( emt_clean, aes(x = n_lineas, y = ih_media_100m) ) +
+geom_point(color = "blue") +
+labs( title = "Relación entre líneas por parada e intensidad de tráfico", x = "Número de líneas en la parada",
+y = "Intensidad media de tráfico"
+) +
+theme_minimal()
 ```
 
+# Discussion
 
+## Interpretación de los resultados
 
-------------------------------------------------------------------------
+La mayoría de paradas tiene pocas líneas y unas pocas concentran más conexiones.
+La distribución de intensidad de tráfico presenta una media superior a la
+mediana, lo que refleja una distribución asimétrica hacia valores elevados.
 
-# 4. Discussion
+El análisis espacial permite observar la localización de sensores y paradas,
+así como describir la intensidad media registrada cerca de las paradas. La
+comparación entre el número de líneas de una parada y la intensidad cercana
+permite explorar una posible asociación, pero no demuestra que una variable
+cause la otra.
 
-## 4.1. Interpretación de los resultados
+Los resultados deben interpretarse teniendo en cuenta que los sensores y las
+paradas son elementos distintos, que la intensidad se resume en un radio de
+100 metros y que los datos disponibles representan una instantánea temporal.
 
-[Explicar qué significan los resultados.]
+# Conclusions
 
-------------------------------------------------------------------------
+El proyecto ha permitido inspeccionar y depurar dos conjuntos de datos
+relacionados con la movilidad urbana de València. En el dataset de tráfico,
+tras descartar intensidades no positivas, filas incompletas y valores por
+encima del límite superior del boxplot, quedan 836 sensores. En el dataset EMT
+se identifican 1.155 paradas activas y 46 líneas distintas.
 
-# 5. Conclusions
+La red de paradas presenta una concentración espacial desigual y la mayoría
+de paradas tiene una sola línea. La integración con los sensores permite
+calcular la intensidad media cercana a cada parada y explorar su relación con
+el número de líneas.
 
-[Resumir los principales descubrimientos y responder a los objetivos y preguntas de investigación.]
+No se puede inferir causalidad, frecuencia de paso, demanda de pasajeros ni
+evolución temporal a partir de estos datos. Como continuación, sería
+conveniente contrastar los resultados con datos temporales, frecuencias de
+servicio, población y límites administrativos.
 
-------------------------------------------------------------------------
+# References
 
-# 12. References
+Ayuntamiento de València. *EMT: información geográfica de las paradas de autobús*.
+Portal de datos abiertos del Ayuntamiento de València.
+https://opendata.vlci.valencia.es/dataset/emt
 
-[Incluir las referencias bibliográficas utilizadas.]
+Ayuntamiento de València. *Capa de tráfico, MapServer 226*.
+https://geoportal.valencia.es/server/rest/services/OPENDATA/Trafico/MapServer/226
 
-```{r}
+# Supplementary Materials
 
-```
-
-## Resultados obtenidos
-
-[Incluir resultados, tablas y gráficos.]
+Los archivos de datos procesados, scripts y figuras generadas se organizan en
+los directorios `data/processed` y `figures` del proyecto.
