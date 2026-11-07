@@ -1,36 +1,39 @@
 ---
-title: "Análisis exploratorio de la intensidad del tráfico y la red de autobuses EMT en València"
+title: Análisis exploratorio de la intensidad del tráfico y la red de autobuses EMT
+  en València
 author:
-  - name: David
-    affil: 1
-  - name: Carlos
-    affil: 1
-  - name: Daniela
-    affil: 1
+- name: David
+  affil: 1
+- name: Carlos
+  affil: 1
+- name: Daniela
+  affil: 1
 affiliation:
-  - num: 1
-    address: |
-      Máster Universitario en Ciencia de Datos
-      Universitat de València, València, España
-authorcitation: |
-  David; Carlos; Daniela
+- num: 1
+  address: |
+    Máster Universitario en Ciencia de Datos
+    Universitat de València, València, España
+output:
+  rticles::mdpi_article:
+    extra_dependencies: longtable
+  pdf_document: default
 correspondence: |
   Universitat de València.
 journal: notspecified
 type: article
 status: submit
 header-includes:
-  - \usepackage{etoolbox}
-  - \usepackage{changepage}
-  - \AtBeginEnvironment{Highlighting}{\scriptsize}
-  - \AtBeginEnvironment{verbatim}{\scriptsize}
-  - \BeforeBeginEnvironment{Shaded}{\begin{adjustwidth}{-1.2cm}{-1.2cm}}
-  - \AfterEndEnvironment{Shaded}{\end{adjustwidth}}
+- \usepackage{etoolbox}
+- \usepackage{changepage}
+- \AtBeginEnvironment{Highlighting}{\scriptsize}
+- \AtBeginEnvironment{verbatim}{\scriptsize}
+- "\\BeforeBeginEnvironment{Shaded}{\\begin{adjustwidth}{-1.2cm}{-1.2cm}}"
+- \AfterEndEnvironment{Shaded}{\end{adjustwidth}}
 simplesummary: |
-  Este trabajo explora dos conjuntos de datos abiertos de València: la intensidad
   del tráfico registrada por sensores y la información geográfica de las paradas
   de autobús EMT. Se estudian su calidad, distribución espacial y posibles
   relaciones entre la red de transporte público y la intensidad del tráfico.
+  Este trabajo explora dos conjuntos de datos abiertos de València: la intensidad
 abstract: |
   El objetivo de este proyecto es explorar dos conjuntos de datos abiertos de València, correspondientes a sensores de intensidad de tráfico y paradas de autobús EMT, para analizar su distribución espacial y posibles relaciones. Tras evaluar su calidad y depurar los datos, se estudian la distribución de los sensores, las características de las paradas y la intensidad media de tráfico en un radio de 100 metros alrededor de estas. Finalmente, se explora la relación entre el número de líneas por parada y la intensidad de tráfico cercana. Los datos representan una instantánea temporal, por lo que no permiten analizar la evolución horaria del tráfico. Los resultados permiten identificar patrones espaciales y explorar asociaciones, sin establecer relaciones de causalidad.
 keywords: |
@@ -43,9 +46,8 @@ authorcontributions: |
   contribuciones individuales queda pendiente de completar por el equipo.
 bibliography: mybibfile.bib
 endnotes: false
-output:
-  rticles::mdpi_article:
-    extra_dependencies: longtable
+authorcitation: |
+  David; Carlos; Daniela
 ---
 
 ```{r setup, include=FALSE}
@@ -427,7 +429,9 @@ y = "Coordenada Y (km)"
 theme_minimal()
 ```
 
-### ¿Cuáles son las paradas con mayor tráfico?
+En este gráfico se aprecia cómo el tráfico cercano a las paradas no se reparte de forma uniforme por la ciudad. Los niveles más altos de vehículos por hora (puntos amarillos y naranjas, por encima de 750 veh/h) se concentran principalmente en la zona central del mapa. Por el contrario, conforme nos desplazamos hacia los extremos o zonas más alejadas, predominan valores de tráfico sensiblemente menores (tonos morados) o paradas que no cuentan con ningún sensor a menos de 100 metros (puntos grises).
+
+### ¿Cuáles son las zonas con mayor tráfico?
 
 ```{r calles-mayor-trafico}
 # Se selecciona el nombre de las calles con mayor intensidad de tráfico cercana
@@ -440,28 +444,35 @@ head(5)
 ggplot( top5_calles, aes( x = ih_media_calle, fill = ih_media_calle, y = reorder(calle, ih_media_calle) ) ) +
 geom_col(width = 0.65) +
 scale_fill_viridis_c( option = "plasma", name = "Intensidad media" ) +
-labs( title = "Cinco calles de València con mayor intensidad de tráfico",
+labs( title = "Cinco zonas de València con mayor intensidad de tráfico",
 subtitle = "Promedio de intensidad de tráfico registrado a menos de 100 m",
 x = "Intensidad media de tráfico (<100m)",
-y = "Calle/Avenida"
+y = "Zonas"
 ) +
 theme_minimal()
 ```
 
+Al agrupar los datos basándonos en los nombres de las paradas, identificamos con claridad las cinco localizaciones que registran la mayor densidad media de tráfico cerca de sus paradas: Manuel de Falla, Ramón y Cajal, Estadi de Mestalla, Plaça del Temple y Gaspar Aguilar. En todas ellas se superan de media los 800 vehículos por hora, situándose como los puntos con mayor volumen de circulación del análisis.
 
 ### ¿Las paradas con más líneas tienen más tráfico cerca?
 
 ```{r lineas-trafico}
 # Calculamos la correlación de Spearman usando solo observaciones completas.
+cor_spearman <- cor(emt_clean$n_lineas, emt_clean$ih_media_100m, 
+                    method = "spearman", 
+                    use = "complete.obs")
 datos_cor <- emt_clean %>%
 filter(!is.na(n_lineas), !is.na(ih_media_100m))
 ggplot( emt_clean, aes(x = n_lineas, y = ih_media_100m) ) +
 geom_point(color = "blue") +
 labs( title = "Relación entre líneas por parada e intensidad de tráfico", x = "Número de líneas en la parada",
-y = "Intensidad media de tráfico"
+      subtitle = paste0("Coeficiente de correlación de Spearman: r = ", round(cor_spearman, 3)),
+      y = "Intensidad media de tráfico"
 ) +
 theme_minimal()
 ```
+
+Al comparar el número de líneas de autobús de cada parada con el tráfico de su entorno, vemos que no existe una relación directa. Encontramos paradas con una sola línea ubicadas en zonas con mucho tráfico, y paradas con muchas líneas en zonas con menor intensidad de vehículos. El valor obtenido en la correlación de Spearman (r = 0,232) confirma esta ausencia de relación lineal.
 
 # Discussion
 
