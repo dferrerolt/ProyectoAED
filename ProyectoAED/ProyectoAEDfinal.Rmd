@@ -144,7 +144,7 @@ las preguntas más interesantes son:
 #### Importación y estructura general
 
 ```{r importar-trafico}
-densidad_dirty <- jsonlite::fromJSON( "raw/Densidad_Trafico.json", simplifyVector = FALSE )
+densidad_dirty <- jsonlite::fromJSON( "data/Densidad_Trafico.json", simplifyVector = FALSE )
 densidad <- purrr::map_dfr(densidad_dirty$features, function(f) { propiedades <- f$properties
  propiedades <- propiedades[ !vapply(propiedades, is.null, logical(1)) ]
  tibble::as_tibble(c( list( id = f$id, longitud = f$geometry$coordinates[[1]],
@@ -186,7 +186,7 @@ mediante la regla del boxplot sobre los valores finitos originales.
 #### Importación y estructura general
 
 ```{r importar-emt}
-emt_json <- jsonlite::fromJSON("raw/emt.json")
+emt_json <- jsonlite::fromJSON("data/emt.json")
 emt <- data.frame( emt_json$features$attributes, emt_json$features$geometry )
 cat( "Registros:", nrow(emt), "| Variables:", ncol(emt), "| Filas con NA:", sum(!complete.cases(emt)), "\n" )
 calidad_emt <- resumen_variables(emt)
